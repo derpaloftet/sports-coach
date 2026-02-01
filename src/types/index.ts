@@ -27,6 +27,7 @@ export interface Activity {
   pace?: number;
   average_stride?: number;
   source?: string;
+  interval_summary?: string[]; // e.g. ['2x 14m 113bpm', '1x 7m16s 130bpm']
 }
 
 // Wellness data from Intervals.icu
@@ -48,6 +49,7 @@ export interface CompactActivity {
   load?: number; // TSS
   feel?: number; // 1-5
   rpe?: number; // 1-10
+  intervals?: string[]; // e.g. ['2x 14m 113bpm', '1x 7m16s 130bpm']
   notes?: string;
 }
 
@@ -70,14 +72,16 @@ export interface RaceGoal {
 export interface WeekPlan {
   id: string;
   planId: string;
+  title: string;
   weekStart: string;
-  status: 'Draft' | 'Planned' | 'In Progress' | 'Done';
+  status: 'Planned' | 'In Progress' | 'Done';
   goal: 'Build Fitness' | 'Increase Volume' | 'Recovery' | 'Race Week' | 'Maintenance';
   plan: string;
   summary?: string;
   plannedLoad?: number;
   actualLoad?: number;
   generatedByAi: boolean;
+  lastUpdated: string;
 }
 
 // Input for the coach agent

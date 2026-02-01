@@ -32,7 +32,6 @@ export class IntervalsClient {
   }
 
   async getWellness(date: string): Promise<Wellness | null> {
-    // Wellness endpoint returns data for a specific date
     const url = `${this.baseUrl}/athlete/${this.athleteId}/wellness/${date}`;
     const response = await fetch(url, { headers: this.headers });
 
@@ -61,16 +60,22 @@ export class IntervalsClient {
     };
   }
 
-  filterActivities(
-    activities: Activity[],
+  /**
+   * Fetch activities and return them in compact format for LLM context.
+   * Filters to runs, rides, and weight training by default.
+   */
+  async getCompactActivities(
+    oldestDate: string,
     types: string[] = ['run', 'ride', 'weight']
-  ): Activity[] {
-    return activities.filter((activity) =>
+  ): Promise<CompactActivity[]> {
+    const activities = await this.getActivities(oldestDate);
+    const filtered = activities.filter((activity) =>
       types.some((type) => activity.type.toLowerCase().includes(type))
     );
+    return this.toCompact(filtered);
   }
 
-  toCompactActivities(activities: Activity[]): CompactActivity[] {
+  private toCompact(activities: Activity[]): CompactActivity[] {
     return activities.map((a) => {
       let type: CompactActivity['type'] = 'Other';
       const lowerType = a.type.toLowerCase();
@@ -87,6 +92,7 @@ export class IntervalsClient {
         load: a.icu_training_load,
         feel: a.feel,
         rpe: a.icu_rpe,
+        intervals: a.interval_summary,
         notes: a.description,
       };
     });
