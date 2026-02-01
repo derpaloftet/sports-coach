@@ -1,0 +1,94 @@
+import type { Activity, CompactActivity, Wellness } from '../types/index.js';
+
+export interface IntervalsConfig {
+  athleteId: string;
+  apiKey: string;
+}
+
+export class IntervalsClient {
+  private readonly baseUrl = 'https://intervals.icu/api/v1';
+  private readonly headers: Record<string, string>;
+  private readonly athleteId: string;
+
+  constructor(config: IntervalsConfig) {
+    this.athleteId = config.athleteId;
+    // Intervals.icu uses Basic auth with API_KEY as username
+    const authToken = Buffer.from(`API_KEY:${config.apiKey}`).toString('base64');
+    this.headers = {
+      Authorization: `Basic ${authToken}`,
+      'Content-Type': 'application/json',
+    };
+  }
+
+  async getActivities(oldestDate: string): Promise<Activity[]> {
+    const url = `${this.baseUrl}/athlete/${this.athleteId}/activities?oldest=${oldestDate}`;
+    const response = await fetch(url, { headers: this.headers });
+
+    if (!response.ok) {
+      throw new Error(`Intervals.icu API error: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json() as Promise<Activity[]>;
+  }
+
+  async getWellness(date: string): Promise<Wellness | null> {
+    // Wellness endpoint returns data for a specific date
+    const url = `${this.baseUrl}/athlete/${this.athleteId}/wellness/${date}`;
+    const response = await fetch(url, { headers: this.headers });
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    if (!response.ok) {
+      throw new Error(`Intervals.icu API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as {
+      ctl?: number;
+      atl?: number;
+      restingHR?: number;
+      weight?: number;
+    };
+    const ctl = data.ctl ?? 0;
+    const atl = data.atl ?? 0;
+    return {
+      ctl,
+      atl,
+      tsb: ctl - atl, // TSB = CTL - ATL
+      restingHR: data.restingHR,
+      weight: data.weight,
+    };
+  }
+
+  filterActivities(
+    activities: Activity[],
+    types: string[] = ['run', 'ride', 'weight']
+  ): Activity[] {
+    return activities.filter((activity) =>
+      types.some((type) => activity.type.toLowerCase().includes(type))
+    );
+  }
+
+  toCompactActivities(activities: Activity[]): CompactActivity[] {
+    return activities.map((a) => {
+      let type: CompactActivity['type'] = 'Other';
+      const lowerType = a.type.toLowerCase();
+      if (lowerType.includes('run')) type = 'Run';
+      else if (lowerType.includes('ride') || lowerType.includes('cycling')) type = 'Ride';
+      else if (lowerType.includes('weight')) type = 'WeightTraining';
+
+      return {
+        date: a.start_date_local.split('T')[0],
+        type,
+        durationMin: Math.round((a.moving_time ?? a.elapsed_time ?? 0) / 60),
+        distanceKm: a.distance ? Math.round((a.distance / 1000) * 100) / 100 : undefined,
+        avgHr: a.average_heartrate,
+        load: a.icu_training_load,
+        feel: a.feel,
+        rpe: a.icu_rpe,
+        notes: a.description,
+      };
+    });
+  }
+}
