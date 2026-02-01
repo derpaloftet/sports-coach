@@ -1,4 +1,4 @@
-import type { Activity, CompactActivity, Wellness } from '../types/index.js';
+import type { Activity, AthleteProfile, CompactActivity, Wellness } from '../types/index.js';
 
 export interface IntervalsConfig {
   athleteId: string;
@@ -17,6 +17,32 @@ export class IntervalsClient {
     this.headers = {
       Authorization: `Basic ${authToken}`,
       'Content-Type': 'application/json',
+    };
+  }
+
+  async getAthlete(): Promise<AthleteProfile> {
+    const url = `${this.baseUrl}/athlete/${this.athleteId}`;
+    const response = await fetch(url, { headers: this.headers });
+
+    if (!response.ok) {
+      throw new Error(`Intervals.icu API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as {
+      dob?: string;
+      max_hr?: number;
+      lthr?: number;
+      weight?: number;
+    };
+
+    // Calculate age from date of birth
+    const age = data.dob ? Math.floor((Date.now() - new Date(data.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 0;
+
+    return {
+      age,
+      maxHr: data.max_hr ?? 0,
+      lthr: data.lthr ?? 0,
+      weight: data.weight ?? 0,
     };
   }
 
