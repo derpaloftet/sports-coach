@@ -6,6 +6,7 @@ export interface NotionConfig {
   apiKey: string;
   plansDbId: string;
   currentPlanPageId?: string;
+  athleteStatePageId?: string;
 }
 
 type PlanStatus = WeekPlan['status'];
@@ -30,11 +31,13 @@ export class NotionClient {
   private readonly client: Client;
   private readonly plansDbId: string;
   private readonly currentPlanPageId?: string;
+  private readonly athleteStatePageId?: string;
 
   constructor(config: NotionConfig) {
     this.client = new Client({ auth: config.apiKey });
     this.plansDbId = config.plansDbId;
     this.currentPlanPageId = config.currentPlanPageId;
+    this.athleteStatePageId = config.athleteStatePageId;
   }
 
   async createPlan(plan: Omit<WeekPlan, 'id'>): Promise<WeekPlan> {
@@ -74,6 +77,33 @@ export class NotionClient {
       filter: { property: PROPS.planId, rich_text: { equals: planId } },
     });
     return response.results.length > 0 ? fromNotionPage(response.results[0]) : null;
+  }
+
+  async getAthleteState(): Promise<string | null> {
+    if (!this.athleteStatePageId) return null;
+
+    const blocks = await this.client.blocks.children.list({ block_id: this.athleteStatePageId });
+    const lines: string[] = [];
+
+    for (const block of blocks.results) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const b = block as any;
+      if (b.type === 'paragraph' && b.paragraph?.rich_text) {
+        const text = b.paragraph.rich_text.map((t: { plain_text: string }) => t.plain_text).join('');
+        if (text.trim()) lines.push(text);
+      } else if (b.type === 'bulleted_list_item' && b.bulleted_list_item?.rich_text) {
+        const text = b.bulleted_list_item.rich_text.map((t: { plain_text: string }) => t.plain_text).join('');
+        if (text.trim()) lines.push(`• ${text}`);
+      } else if (b.type === 'heading_1' && b.heading_1?.rich_text) {
+        const text = b.heading_1.rich_text.map((t: { plain_text: string }) => t.plain_text).join('');
+        if (text.trim()) lines.push(`# ${text}`);
+      } else if (b.type === 'heading_2' && b.heading_2?.rich_text) {
+        const text = b.heading_2.rich_text.map((t: { plain_text: string }) => t.plain_text).join('');
+        if (text.trim()) lines.push(`## ${text}`);
+      }
+    }
+
+    return lines.length > 0 ? lines.join('\n') : null;
   }
 
   private async updateCurrentPlanPage(title: string, planText: string): Promise<void> {
@@ -154,6 +184,15 @@ function planToBlocks(title: string, planText: string): Array<Record<string, unk
       });
     }
   }
+
+  // Add updated timestamp
+  const now = new Date();
+  const timestamp = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  blocks.push({
+    object: 'block',
+    type: 'paragraph',
+    paragraph: { rich_text: [{ type: 'text', text: { content: `\nUpdated: ${timestamp}` } }] },
+  });
 
   return blocks;
 }

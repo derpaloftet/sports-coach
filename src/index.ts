@@ -12,6 +12,7 @@ const {
   NOTION_API_KEY,
   NOTION_PLANS_DB_ID,
   NOTION_CURRENT_PLAN_PAGE_ID,
+  NOTION_ATHLETE_STATE_PAGE_ID,
 } = process.env;
 
 if (!INTERVALS_ATHLETE_ID || !INTERVALS_API_KEY) {
@@ -51,6 +52,7 @@ const notion = new NotionClient({
   apiKey: NOTION_API_KEY,
   plansDbId: NOTION_PLANS_DB_ID,
   currentPlanPageId: NOTION_CURRENT_PLAN_PAGE_ID,
+  athleteStatePageId: NOTION_ATHLETE_STATE_PAGE_ID,
 });
 
 const coach = new Coach({
@@ -121,7 +123,12 @@ async function main() {
   }
 
   const currentPlan = await getCurrentWeekPlan();
+  const athleteState = await notion.getAthleteState();
   const { weekNumber, totalWeeks } = getWeeksUntilRace();
+
+  if (athleteState) {
+    console.log(`\nAthlete state loaded (${athleteState.length} chars)`);
+  }
 
   await runCoach({
     athlete,
@@ -131,6 +138,7 @@ async function main() {
     raceGoal,
     weekNumber,
     totalWeeks,
+    athleteState: athleteState ?? undefined,
   });
 }
 

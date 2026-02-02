@@ -93,6 +93,7 @@ export interface CoachInput {
   raceGoal: RaceGoal;
   weekNumber: number;
   totalWeeks: number;
+  athleteState?: string;
 }
 
 // Config from environment

@@ -29,20 +29,27 @@ export class IntervalsClient {
     }
 
     const data = (await response.json()) as {
-      dob?: string;
-      max_hr?: number;
-      lthr?: number;
-      weight?: number;
+      icu_date_of_birth?: string;
+      icu_weight?: number;
+      sportSettings?: Array<{
+        types: string[];
+        max_hr?: number;
+        lthr?: number;
+      }>;
     };
 
     // Calculate age from date of birth
-    const age = data.dob ? Math.floor((Date.now() - new Date(data.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 0;
+    const dob = data.icu_date_of_birth;
+    const age = dob ? Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 0;
+
+    // Get HR settings from Run sport settings
+    const runSettings = data.sportSettings?.find((s) => s.types.includes('Run'));
 
     return {
       age,
-      maxHr: data.max_hr ?? 0,
-      lthr: data.lthr ?? 0,
-      weight: data.weight ?? 0,
+      maxHr: runSettings?.max_hr ?? 0,
+      lthr: runSettings?.lthr ?? 0,
+      weight: data.icu_weight ?? 0,
     };
   }
 

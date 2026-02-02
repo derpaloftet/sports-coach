@@ -73,6 +73,10 @@ export function buildUserMessage(input: CoachInput): string {
 
   let message = `## Recent Activities (last 30 days)\n${activitiesText}\n\n`;
 
+  if (input.athleteState) {
+    message += `## Athlete's Current State (self-reported)\n${input.athleteState}\n\n`;
+  }
+
   if (input.currentWeekPlan) {
     message += `## Current Week Plan\nStatus: ${input.currentWeekPlan.status}\nGoal: ${input.currentWeekPlan.goal}\n`;
     message += `Planned Load: ${input.currentWeekPlan.plannedLoad ?? 'not set'} TSS\n\n`;
