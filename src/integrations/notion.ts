@@ -1,6 +1,6 @@
 import { Client } from '@notionhq/client';
 import type { WeekPlan } from '../types/index.js';
-import { today } from '../utils/date.js';
+import { nowISO } from '../utils/date.js';
 
 export interface NotionConfig {
   apiKey: string;
@@ -49,7 +49,7 @@ export class NotionClient {
 
     // Update the current plan page if configured
     if (this.currentPlanPageId) {
-      await this.updateCurrentPlanPage(plan.title, plan.plan);
+      await this.updateCurrentPlanPage(plan.title, plan.weekFocus, plan.plan);
     }
 
     return fromNotionPage(response);
@@ -65,7 +65,7 @@ export class NotionClient {
 
     // If plan text changed, update the current plan page
     if (updates.plan && this.currentPlanPageId) {
-      await this.updateCurrentPlanPage(updates.title ?? 'Current Plan', updates.plan);
+      await this.updateCurrentPlanPage(updates.title ?? 'Current Plan', updates.weekFocus, updates.plan);
     }
 
     return fromNotionPage(response);
@@ -106,7 +106,7 @@ export class NotionClient {
     return lines.length > 0 ? lines.join('\n') : null;
   }
 
-  private async updateCurrentPlanPage(title: string, planText: string): Promise<void> {
+  private async updateCurrentPlanPage(title: string, weekFocus: string | undefined, planText: string): Promise<void> {
     if (!this.currentPlanPageId) return;
 
     // Get existing blocks
@@ -121,7 +121,7 @@ export class NotionClient {
     await this.client.blocks.children.append({
       block_id: this.currentPlanPageId,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      children: planToBlocks(title, planText) as any,
+      children: planToBlocks(title, weekFocus, planText) as any,
     });
   }
 }
@@ -165,7 +165,7 @@ function toNotionProps(plan: Partial<Omit<WeekPlan, 'id'>>): Record<string, unkn
 }
 
 // Convert plan text to Notion blocks (page content)
-function planToBlocks(title: string, planText: string): Array<Record<string, unknown>> {
+function planToBlocks(title: string, weekFocus: string | undefined, planText: string): Array<Record<string, unknown>> {
   const blocks: Array<Record<string, unknown>> = [
     {
       object: 'block',
@@ -173,6 +173,18 @@ function planToBlocks(title: string, planText: string): Array<Record<string, unk
       heading_2: { rich_text: [{ type: 'text', text: { content: title } }] },
     },
   ];
+
+  // Add week focus intro if provided
+  if (weekFocus) {
+    blocks.push({
+      object: 'block',
+      type: 'callout',
+      callout: {
+        rich_text: [{ type: 'text', text: { content: weekFocus } }],
+        icon: { type: 'emoji', emoji: '🏃' },
+      },
+    });
+  }
 
   // Each line becomes a bullet point
   for (const line of planText.split('\n')) {
@@ -213,6 +225,6 @@ function fromNotionPage(page: any): WeekPlan {
     plannedLoad: p[PROPS.plannedLoad]?.number ?? undefined,
     actualLoad: p[PROPS.actualLoad]?.number ?? undefined,
     generatedByAi: p[PROPS.generatedByAi]?.checkbox ?? false,
-    lastUpdated: p[PROPS.lastUpdated]?.date?.start ?? today(),
+    lastUpdated: p[PROPS.lastUpdated]?.date?.start ?? nowISO(),
   };
 }

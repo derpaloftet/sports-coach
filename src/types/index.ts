@@ -76,6 +76,7 @@ export interface WeekPlan {
   weekStart: string;
   status: 'Planned' | 'In Progress' | 'Done';
   goal: 'Build Fitness' | 'Increase Volume' | 'Recovery' | 'Race Week' | 'Maintenance';
+  weekFocus?: string;
   plan: string;
   summary?: string;
   plannedLoad?: number;

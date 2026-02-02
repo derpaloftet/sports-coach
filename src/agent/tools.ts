@@ -13,6 +13,11 @@ export const coachTools: Tool[] = [
           enum: ['Build Fitness', 'Increase Volume', 'Recovery', 'Race Week', 'Maintenance'],
           description: 'The training goal for this week',
         },
+        weekFocus: {
+          type: 'string',
+          description:
+            'A motivational intro message (2-3 sentences) explaining what this week focuses on and encouraging the athlete. E.g. "This week we focus on building your aerobic base with easy runs. Your consistency is paying off - keep it up!"',
+        },
         plan: {
           type: 'string',
           description:
@@ -27,7 +32,7 @@ export const coachTools: Tool[] = [
           description: 'Expected weekly training load (TSS)',
         },
       },
-      required: ['goal', 'plan', 'summary', 'plannedLoad'],
+      required: ['goal', 'weekFocus', 'plan', 'summary', 'plannedLoad'],
     },
   },
   {
@@ -37,6 +42,11 @@ export const coachTools: Tool[] = [
     input_schema: {
       type: 'object' as const,
       properties: {
+        weekFocus: {
+          type: 'string',
+          description:
+            'Updated motivational intro message (2-3 sentences) explaining the adjusted focus for this week.',
+        },
         plan: {
           type: 'string',
           description: 'Updated daily workout plan',
@@ -50,7 +60,7 @@ export const coachTools: Tool[] = [
           description: 'Updated expected weekly training load',
         },
       },
-      required: ['plan', 'summary'],
+      required: ['weekFocus', 'plan', 'summary'],
     },
   },
   {
@@ -97,12 +107,14 @@ export const coachTools: Tool[] = [
 // Tool input types for type safety
 export interface CreateWeekPlanInput {
   goal: 'Build Fitness' | 'Increase Volume' | 'Recovery' | 'Race Week' | 'Maintenance';
+  weekFocus: string;
   plan: string;
   summary: string;
   plannedLoad: number;
 }
 
 export interface UpdateWeekPlanInput {
+  weekFocus: string;
   plan: string;
   summary: string;
   plannedLoad?: number;

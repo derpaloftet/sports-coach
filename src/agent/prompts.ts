@@ -1,4 +1,50 @@
-import type { CoachInput } from '../types/index.js';
+import type { CoachInput, CompactActivity } from '../types/index.js';
+
+/**
+ * Calculate weekly summary from activities (for trend visibility)
+ */
+function calculateWeeklySummary(activities: CompactActivity[]): string {
+  // Group activities by week (Monday-Sunday)
+  const weeks: Map<string, { runKm: number; runCount: number; totalLoad: number; totalMin: number }> = new Map();
+
+  for (const a of activities) {
+    const date = new Date(a.date);
+    const day = date.getDay();
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    const monday = new Date(date);
+    monday.setDate(date.getDate() + mondayOffset);
+    const weekKey = monday.toISOString().split('T')[0];
+
+    if (!weeks.has(weekKey)) {
+      weeks.set(weekKey, { runKm: 0, runCount: 0, totalLoad: 0, totalMin: 0 });
+    }
+
+    const week = weeks.get(weekKey)!;
+    week.totalLoad += a.load ?? 0;
+    week.totalMin += a.durationMin;
+
+    if (a.type === 'Run') {
+      week.runKm += a.distanceKm ?? 0;
+      week.runCount++;
+    }
+  }
+
+  // Sort by week and take last 4
+  const sortedWeeks = Array.from(weeks.entries())
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .slice(0, 4)
+    .reverse();
+
+  if (sortedWeeks.length === 0) return '';
+
+  const lines = sortedWeeks.map(([weekStart, data]) => {
+    const date = new Date(weekStart);
+    const weekLabel = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}`;
+    return `${weekLabel}: ${data.runKm.toFixed(1)}km (${data.runCount} runs), ${Math.round(data.totalLoad)} TSS total`;
+  });
+
+  return `## Weekly Trend (last 4 weeks)\n${lines.join('\n')}`;
+}
 
 export function buildSystemPrompt(input: CoachInput): string {
   return `You are an experienced running coach helping an athlete prepare for a ${input.raceGoal.event} race.
@@ -71,7 +117,9 @@ export function buildUserMessage(input: CoachInput): string {
     })
     .join('\n');
 
-  let message = `## Recent Activities (last 30 days)\n${activitiesText}\n\n`;
+  const weeklySummary = calculateWeeklySummary(input.recentActivities);
+
+  let message = `${weeklySummary}\n\n## Recent Activities (last 30 days)\n${activitiesText}\n\n`;
 
   if (input.athleteState) {
     message += `## Athlete's Current State (self-reported)\n${input.athleteState}\n\n`;

@@ -3,7 +3,7 @@ import type { CoachInput, WeekPlan } from '../types/index.js';
 import type { NotionClient } from '../integrations/notion.js';
 import { coachTools, CreateWeekPlanInput, UpdateWeekPlanInput, FlagRiskInput, AddNoteInput } from './tools.js';
 import { buildSystemPrompt, buildUserMessage } from './prompts.js';
-import { today, getWeekStart, getWeekNumber, formatWeekRange } from '../utils/date.js';
+import { nowISO, getWeekStart, getWeekNumber, formatWeekRange } from '../utils/date.js';
 
 export interface CoachResult {
   plan: WeekPlan | null;
@@ -31,7 +31,6 @@ export class Coach {
     const userMessage = buildUserMessage(input);
 
     console.log('\n--- Calling Claude ---');
-
     const response = await this.client.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 2048,
@@ -79,6 +78,9 @@ export class Coach {
       case 'create_week_plan': {
         const toolInput = input as CreateWeekPlanInput;
         console.log('\n>>> Creating week plan...');
+        if (toolInput.weekFocus) {
+          console.log(`Focus: ${toolInput.weekFocus}`);
+        }
 
         const plan = await this.notion.createPlan({
           planId,
@@ -86,11 +88,12 @@ export class Coach {
           weekStart,
           status: 'Planned',
           goal: toolInput.goal,
+          weekFocus: toolInput.weekFocus,
           plan: toolInput.plan,
           summary: toolInput.summary,
           plannedLoad: toolInput.plannedLoad,
           generatedByAi: true,
-          lastUpdated: today(),
+          lastUpdated: nowISO(),
         });
 
         console.log(`Created plan: ${plan.planId}`);
@@ -105,13 +108,17 @@ export class Coach {
         }
 
         console.log('\n>>> Updating week plan...');
+        if (toolInput.weekFocus) {
+          console.log(`Focus: ${toolInput.weekFocus}`);
+        }
 
         const plan = await this.notion.updatePlan(coachInput.currentWeekPlan.id, {
           title,
+          weekFocus: toolInput.weekFocus,
           plan: toolInput.plan,
           summary: toolInput.summary,
           plannedLoad: toolInput.plannedLoad,
-          lastUpdated: today(),
+          lastUpdated: nowISO(),
         });
 
         console.log(`Updated plan: ${plan.planId}`);

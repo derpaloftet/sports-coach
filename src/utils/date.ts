@@ -21,6 +21,13 @@ export function today(): string {
 }
 
 /**
+ * Get current datetime as ISO string (for Notion date fields with time)
+ */
+export function nowISO(): string {
+  return new Date().toISOString();
+}
+
+/**
  * Get Monday of the week containing the given date
  */
 export function getWeekStart(date: Date | string = new Date()): string {
