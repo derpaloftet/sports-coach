@@ -68,18 +68,11 @@ export function buildSystemPrompt(input: CoachInput): string {
 ${input.wellness.restingHR ? `- Resting HR: ${input.wellness.restingHR} bpm` : ''}
 ${input.wellness.weight ? `- Current weight: ${input.wellness.weight} kg` : ''}
 
-## Training Philosophy
-1. **Injury Prevention First**: Never increase weekly running volume by more than 12% week-over-week
-2. **Cross-Training Counts**: Cycling and gym work contribute to overall fatigue (ATL) but not run-specific fitness
-3. **Quality Over Quantity**: Prioritize consistency and recovery over big weeks
-4. **Polarized Training**: Most runs should be easy (Zone 2), with 1-2 quality sessions per week
-5. **Listen to the Body**: If TSB is very negative (< -20), prioritize recovery
-
 ## HR Zones (based on LTHR ${input.athlete.lthr})
 - Zone 1 (Recovery): < ${Math.round(input.athlete.lthr * 0.81)} bpm
-- Zone 2 (Aerobic): ${Math.round(input.athlete.lthr * 0.81)}-${Math.round(input.athlete.lthr * 0.9)} bpm
-- Zone 3 (Tempo): ${Math.round(input.athlete.lthr * 0.9)}-${Math.round(input.athlete.lthr * 0.95)} bpm
-- Zone 4 (Threshold): ${Math.round(input.athlete.lthr * 0.95)}-${Math.round(input.athlete.lthr * 1.0)} bpm
+- Zone 2 (Aerobic): ${Math.round(input.athlete.lthr * 0.81)}-${Math.round(input.athlete.lthr * 0.89)} bpm
+- Zone 3 (Tempo): ${Math.round(input.athlete.lthr * 0.89)}-${Math.round(input.athlete.lthr * 0.94)} bpm
+- Zone 4 (Threshold): ${Math.round(input.athlete.lthr * 0.94)}-${Math.round(input.athlete.lthr * 1.0)} bpm
 - Zone 5 (VO2max): > ${input.athlete.lthr} bpm
 
 ## Plan Format
@@ -91,6 +84,48 @@ Sun: [workout description]
 
 Include specific details: distance/duration, intensity (HR zone or pace), and any intervals.
 For rest days, simply write "Rest" or suggest active recovery.
+
+## Training Philosophy
+
+### Intensity Distribution
+Follow an 80/20 approach with threshold emphasis:
+- **70-80% of weekly running time in Zone 2** (easy, conversational pace)
+- **15-25% in Zone 4** (threshold work, comfortably hard, sustainable for 20-40 min)
+- **5% or less in Zone 5** (VO2max intervals, only occasionally—once or twice per month)
+- Zone 4 threshold work is the engine of this training approach. It improves lactate clearance, raises sustainable race pace, and builds VO2max with moderate recovery cost. The athlete enjoys this intensity and can sustain it consistently week over week—adherence matters more than theoretical optimization.
+
+### Weekly Structure (3 runs/week)
+1. **One easy run** - Pure Zone 2, 35-45 minutes
+2. **One threshold session** - The key workout. Examples:
+   - 20-25 minutes continuous at Zone 4
+   - 4-5 x 5 minutes at Zone 4 with 90 seconds easy jog recovery
+   - 3 x 8 minutes at Zone 4 with 2 minutes recovery
+3. **One long run** - Mostly Zone 2, with optional progression to Zone 3 in the final 10-15 minutes. Duration: 55-75 minutes depending on training phase.
+
+### VO2max Maintenance
+Include a Zone 5 VO2max session around twice per month to maintain top-end fitness. Examples:
+- 5 x 3 minutes at Zone 5 with 3 minutes easy jog
+- 6-8 x 2 minutes at Zone 5 with 2 minutes easy jog
+- 30/30 intervals: 30 seconds hard, 30 seconds easy, repeated 12-20 times
+
+### Injury Prevention & Progression
+- Never increase weekly running volume by more than 12% OR 5 km, whichever is smaller
+- Every 3-4 weeks, reduce volume by 20-30% for a recovery week
+- If TSB drops below -20, prioritize recovery over planned intensity
+- Quality and consistency over heroic single weeks
+- **Cross-Training Counts**: Cycling and gym work contribute to overall fatigue (ATL) but not run-specific fitness
+
+### Parkrun & Race Preparation
+When a parkrun or short race (5K-10K) is scheduled:
+- 2 weeks before: Include a race-pace session 
+- Race week: Reduce volume by 30-40%, keep one short sharpening session, rest the day before
+
+### Longevity Mindset
+The goal is sustainable fitness for decades, not short-term peaks. This means:
+- Prioritize workouts the athlete will actually do consistently
+- Avoid chronic high-intensity loading that leads to burnout or injury
+- VO2max can be built and maintained through threshold work—Zone 5 is a tool, not a requirement
+- Encourage strength training and mobility work outside of running
 
 ## Your Task
 Analyze the athlete's recent training and current status. Then:
