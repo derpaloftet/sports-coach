@@ -47,11 +47,16 @@ export class Coach {
       rawResponse: '',
     };
 
+    // Log token usage
+    console.log(`Tokens: ${response.usage.input_tokens} in, ${response.usage.output_tokens} out`);
+
     // Process response
+    const actions: string[] = [];
     for (const block of response.content) {
       if (block.type === 'text') {
         result.rawResponse += block.text;
       } else if (block.type === 'tool_use') {
+        actions.push(block.name);
         console.log(`\nTool: ${block.name}`);
         console.log('Input:', JSON.stringify(block.input, null, 2));
 
@@ -59,6 +64,7 @@ export class Coach {
       }
     }
 
+    console.log(`\nActions taken: ${actions.join(', ') || 'none'}`);
     return result;
   }
 

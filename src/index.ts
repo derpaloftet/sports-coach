@@ -130,6 +130,22 @@ async function main() {
     console.log(`\nAthlete state loaded (${athleteState.length} chars)`);
   }
 
+  // Skip if plan exists and nothing changed since last update
+  const force = process.argv.includes('--force');
+  if (currentPlan && !force) {
+    const lastUpdated = currentPlan.lastUpdated;
+    const latestActivity = activities.length > 0
+      ? activities.reduce((latest, a) => (a.date > latest ? a.date : latest), activities[0].date)
+      : null;
+
+    if (!latestActivity || latestActivity <= lastUpdated.split('T')[0]) {
+      console.log(`\nNo new activities since plan was last updated (${lastUpdated}).`);
+      console.log('Skipping coach run. Use --force to override.');
+      return;
+    }
+    console.log(`\nNew activity detected (${latestActivity}), updating plan...`);
+  }
+
   await runCoach({
     athlete,
     wellness,

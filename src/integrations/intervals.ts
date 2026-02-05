@@ -48,7 +48,7 @@ export class IntervalsClient {
     return {
       age,
       maxHr: runSettings?.max_hr ?? 0,
-      lthr: runSettings?.lthr ?? 0,
+      lthr: 153, //runSettings?.lthr ?? 0,
       weight: data.icu_weight ?? 0,
     };
   }
