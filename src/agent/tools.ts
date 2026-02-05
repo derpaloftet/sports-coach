@@ -16,12 +16,12 @@ export const coachTools: Tool[] = [
         weekFocus: {
           type: 'string',
           description:
-            'A motivational intro message (2-3 sentences) explaining what this week focuses on and encouraging the athlete. E.g. "This week we focus on building your aerobic base with easy runs. Your consistency is paying off - keep it up!"',
+            'Short informal coach note shown on the plan page. Keep it casual and direct — like a mate who coaches you. Structure: (1) Quick take on last week (1-2 sentences). (2) What matters this week (1 sentence). (3) Technique cue (1 line, e.g. "Technique: cadence — short quick steps, 170-180 spm").',
         },
         plan: {
           type: 'string',
           description:
-            'Daily workout plan, one line per day in format "Mon: description". Include all 7 days.',
+            'Daily workout plan, one line per day in format "Mon DD.MM: description" (e.g. "Thu 05.02: 6x2min Zone 4, 2min jog recovery"). Include all 7 days.',
         },
         summary: {
           type: 'string',
@@ -45,7 +45,7 @@ export const coachTools: Tool[] = [
         weekFocus: {
           type: 'string',
           description:
-            'Updated motivational intro message (2-3 sentences) explaining the adjusted focus for this week.',
+            'Updated coach note. Keep it short and informal. (1) Quick review so far. (2) What to adjust. (3) Technique cue.',
         },
         plan: {
           type: 'string',

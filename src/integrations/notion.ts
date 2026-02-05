@@ -109,20 +109,23 @@ export class NotionClient {
   private async updateCurrentPlanPage(title: string, weekFocus: string | undefined, planText: string): Promise<void> {
     if (!this.currentPlanPageId) return;
 
+    // Build new blocks first, before deleting anything
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const newBlocks = planToBlocks(title, weekFocus, planText) as any;
+
     // Get existing blocks
     const existing = await this.client.blocks.children.list({ block_id: this.currentPlanPageId });
 
-    // Delete all existing blocks
+    // Append new blocks first, then delete old ones — page is never empty
+    await this.client.blocks.children.append({
+      block_id: this.currentPlanPageId,
+      children: newBlocks,
+    });
+
+    // Now delete the old blocks
     for (const block of existing.results) {
       await this.client.blocks.delete({ block_id: block.id });
     }
-
-    // Add new blocks
-    await this.client.blocks.children.append({
-      block_id: this.currentPlanPageId,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      children: planToBlocks(title, weekFocus, planText) as any,
-    });
   }
 }
 
@@ -131,7 +134,7 @@ function toNotionProps(plan: Partial<Omit<WeekPlan, 'id'>>): Record<string, unkn
   const props: Record<string, unknown> = {};
 
   const text = (key: string, value?: string) => {
-    if (value !== undefined) props[key] = { rich_text: [{ text: { content: value } }] };
+    if (value !== undefined) props[key] = { rich_text: toRichText(value) };
   };
   const title = (key: string, value?: string) => {
     if (value !== undefined) props[key] = { title: [{ text: { content: value } }] };
@@ -164,6 +167,22 @@ function toNotionProps(plan: Partial<Omit<WeekPlan, 'id'>>): Record<string, unkn
   return props;
 }
 
+/**
+ * Split text into chunks of max 2000 characters (Notion rich_text limit).
+ * Returns an array of Notion rich_text objects.
+ */
+function toRichText(text: string): Array<{ type: 'text'; text: { content: string } }> {
+  const MAX = 2000;
+  if (text.length <= MAX) {
+    return [{ type: 'text', text: { content: text } }];
+  }
+  const chunks: Array<{ type: 'text'; text: { content: string } }> = [];
+  for (let i = 0; i < text.length; i += MAX) {
+    chunks.push({ type: 'text', text: { content: text.slice(i, i + MAX) } });
+  }
+  return chunks;
+}
+
 // Convert plan text to Notion blocks (page content)
 function planToBlocks(title: string, weekFocus: string | undefined, planText: string): Array<Record<string, unknown>> {
   const blocks: Array<Record<string, unknown>> = [
@@ -180,7 +199,7 @@ function planToBlocks(title: string, weekFocus: string | undefined, planText: st
       object: 'block',
       type: 'callout',
       callout: {
-        rich_text: [{ type: 'text', text: { content: weekFocus } }],
+        rich_text: toRichText(weekFocus),
         icon: { type: 'emoji', emoji: '🏃' },
       },
     });
@@ -192,7 +211,7 @@ function planToBlocks(title: string, weekFocus: string | undefined, planText: st
       blocks.push({
         object: 'block',
         type: 'bulleted_list_item',
-        bulleted_list_item: { rich_text: [{ type: 'text', text: { content: line } }] },
+        bulleted_list_item: { rich_text: toRichText(line) },
       });
     }
   }
