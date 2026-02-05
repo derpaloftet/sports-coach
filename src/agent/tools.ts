@@ -31,6 +31,11 @@ export const coachTools: Tool[] = [
           type: 'number',
           description: 'Expected weekly training load (TSS)',
         },
+        dailyNote: {
+          type: 'string',
+          description:
+            'Optional short note about today/tomorrow — what to focus on right now. Shown at the top of the plan page, not stored in DB.',
+        },
       },
       required: ['goal', 'weekFocus', 'plan', 'summary', 'plannedLoad'],
     },
@@ -58,6 +63,11 @@ export const coachTools: Tool[] = [
         plannedLoad: {
           type: 'number',
           description: 'Updated expected weekly training load',
+        },
+        dailyNote: {
+          type: 'string',
+          description:
+            'Optional short note about today/tomorrow — what to focus on right now.',
         },
       },
       required: ['weekFocus', 'plan', 'summary'],
@@ -111,6 +121,7 @@ export interface CreateWeekPlanInput {
   plan: string;
   summary: string;
   plannedLoad: number;
+  dailyNote?: string;
 }
 
 export interface UpdateWeekPlanInput {
@@ -118,6 +129,7 @@ export interface UpdateWeekPlanInput {
   plan: string;
   summary: string;
   plannedLoad?: number;
+  dailyNote?: string;
 }
 
 export interface FlagRiskInput {

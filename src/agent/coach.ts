@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 import type { CoachInput, WeekPlan } from '../types/index.js';
 import type { NotionClient } from '../integrations/notion.js';
 import { coachTools, CreateWeekPlanInput, UpdateWeekPlanInput, FlagRiskInput, AddNoteInput } from './tools.js';
@@ -17,6 +18,8 @@ export interface CoachConfig {
   notion: NotionClient;
 }
 
+const MAX_TURNS = 4;
+
 export class Coach {
   private readonly client: Anthropic;
   private readonly notion: NotionClient;
@@ -29,16 +32,7 @@ export class Coach {
   async run(input: CoachInput): Promise<CoachResult> {
     const systemPrompt = buildSystemPrompt(input);
     const userMessage = buildUserMessage(input);
-
-    console.log('\n--- Calling Claude ---');
-    const response = await this.client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2048,
-      system: systemPrompt,
-      tools: coachTools,
-      tool_choice: { type: 'any' },
-      messages: [{ role: 'user', content: userMessage }],
-    });
+    const messages: MessageParam[] = [{ role: 'user', content: userMessage }];
 
     const result: CoachResult = {
       plan: input.currentWeekPlan,
@@ -47,24 +41,56 @@ export class Coach {
       rawResponse: '',
     };
 
-    // Log token usage
-    console.log(`Tokens: ${response.usage.input_tokens} in, ${response.usage.output_tokens} out`);
-
-    // Process response
     const actions: string[] = [];
-    for (const block of response.content) {
-      if (block.type === 'text') {
-        result.rawResponse += block.text;
-      } else if (block.type === 'tool_use') {
-        actions.push(block.name);
-        console.log(`\nTool: ${block.name}`);
-        console.log('Input:', JSON.stringify(block.input, null, 2));
+    let totalIn = 0;
+    let totalOut = 0;
 
-        result.plan = await this.executeTool(block.name, block.input, input, result);
+    for (let turn = 1; turn <= MAX_TURNS; turn++) {
+      console.log(`\n--- Calling Claude (turn ${turn}) ---`);
+      const response = await this.client.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2048,
+        system: systemPrompt,
+        tools: coachTools,
+        tool_choice: { type: 'auto' },
+        messages,
+      });
+
+      totalIn += response.usage.input_tokens;
+      totalOut += response.usage.output_tokens;
+
+      // Collect tool calls and results
+      const toolResults: Array<{ type: 'tool_result'; tool_use_id: string; content: string }> = [];
+
+      for (const block of response.content) {
+        if (block.type === 'text') {
+          result.rawResponse += block.text;
+        } else if (block.type === 'tool_use') {
+          actions.push(block.name);
+          console.log(`\nTool: ${block.name}`);
+          console.log('Input:', JSON.stringify(block.input, null, 2));
+
+          const toolResultText = await this.executeTool(block.name, block.input, input, result);
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: block.id,
+            content: toolResultText,
+          });
+        }
       }
+
+      // If no tool calls, we're done
+      if (response.stop_reason !== 'tool_use' || toolResults.length === 0) {
+        break;
+      }
+
+      // Feed tool results back for next turn
+      messages.push({ role: 'assistant', content: response.content });
+      messages.push({ role: 'user', content: toolResults });
     }
 
-    console.log(`\nActions taken: ${actions.join(', ') || 'none'}`);
+    console.log(`\nTokens total: ${totalIn} in, ${totalOut} out`);
+    console.log(`Actions taken: ${actions.join(', ') || 'none'}`);
     return result;
   }
 
@@ -73,7 +99,7 @@ export class Coach {
     input: unknown,
     coachInput: CoachInput,
     result: CoachResult
-  ): Promise<WeekPlan | null> {
+  ): Promise<string> {
     const weekStart = getWeekStart();
     const year = new Date(weekStart).getFullYear();
     const weekNum = getWeekNumber(weekStart);
@@ -88,29 +114,33 @@ export class Coach {
           console.log(`Focus: ${toolInput.weekFocus}`);
         }
 
-        const plan = await this.notion.createPlan({
-          planId,
-          title,
-          weekStart,
-          status: 'Planned',
-          goal: toolInput.goal,
-          weekFocus: toolInput.weekFocus,
-          plan: toolInput.plan,
-          summary: toolInput.summary,
-          plannedLoad: toolInput.plannedLoad,
-          generatedByAi: true,
-          lastUpdated: nowISO(),
-        });
+        const plan = await this.notion.createPlan(
+          {
+            planId,
+            title,
+            weekStart,
+            status: 'Planned',
+            goal: toolInput.goal,
+            weekFocus: toolInput.weekFocus,
+            plan: toolInput.plan,
+            summary: toolInput.summary,
+            plannedLoad: toolInput.plannedLoad,
+            generatedByAi: true,
+            lastUpdated: nowISO(),
+          },
+          toolInput.dailyNote,
+        );
 
         console.log(`Created plan: ${plan.planId}`);
-        return plan;
+        result.plan = plan;
+        return `Plan created: ${plan.planId}`;
       }
 
       case 'update_week_plan': {
         const toolInput = input as UpdateWeekPlanInput;
         if (!coachInput.currentWeekPlan) {
           console.log('>>> No existing plan to update');
-          return null;
+          return 'Error: no existing plan to update';
         }
 
         console.log('\n>>> Updating week plan...');
@@ -118,17 +148,22 @@ export class Coach {
           console.log(`Focus: ${toolInput.weekFocus}`);
         }
 
-        const plan = await this.notion.updatePlan(coachInput.currentWeekPlan.id, {
-          title,
-          weekFocus: toolInput.weekFocus,
-          plan: toolInput.plan,
-          summary: toolInput.summary,
-          plannedLoad: toolInput.plannedLoad,
-          lastUpdated: nowISO(),
-        });
+        const plan = await this.notion.updatePlan(
+          coachInput.currentWeekPlan.id,
+          {
+            title,
+            weekFocus: toolInput.weekFocus,
+            plan: toolInput.plan,
+            summary: toolInput.summary,
+            plannedLoad: toolInput.plannedLoad,
+            lastUpdated: nowISO(),
+          },
+          toolInput.dailyNote,
+        );
 
         console.log(`Updated plan: ${plan.planId}`);
-        return plan;
+        result.plan = plan;
+        return `Plan updated: ${plan.planId}`;
       }
 
       case 'flag_risk': {
@@ -136,19 +171,19 @@ export class Coach {
         console.log(`\n>>> RISK FLAGGED: [${toolInput.severity.toUpperCase()}] ${toolInput.risk}`);
         console.log(`    ${toolInput.message}`);
         result.risks.push(toolInput);
-        return result.plan;
+        return `Risk flagged: ${toolInput.risk} (${toolInput.severity})`;
       }
 
       case 'add_note': {
         const toolInput = input as AddNoteInput;
         console.log(`\n>>> Note: ${toolInput.note}`);
         result.notes.push(toolInput.note);
-        return result.plan;
+        return `Note recorded`;
       }
 
       default:
         console.log(`Unknown tool: ${name}`);
-        return result.plan;
+        return `Unknown tool: ${name}`;
     }
   }
 }

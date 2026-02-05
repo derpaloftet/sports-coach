@@ -40,7 +40,7 @@ export class NotionClient {
     this.athleteStatePageId = config.athleteStatePageId;
   }
 
-  async createPlan(plan: Omit<WeekPlan, 'id'>): Promise<WeekPlan> {
+  async createPlan(plan: Omit<WeekPlan, 'id'>, dailyNote?: string): Promise<WeekPlan> {
     const response = await this.client.pages.create({
       parent: { database_id: this.plansDbId },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,13 +49,13 @@ export class NotionClient {
 
     // Update the current plan page if configured
     if (this.currentPlanPageId) {
-      await this.updateCurrentPlanPage(plan.title, plan.weekFocus, plan.plan);
+      await this.updateCurrentPlanPage(plan.title, plan.weekFocus, plan.plan, dailyNote);
     }
 
     return fromNotionPage(response);
   }
 
-  async updatePlan(id: string, updates: Partial<Omit<WeekPlan, 'id'>>): Promise<WeekPlan> {
+  async updatePlan(id: string, updates: Partial<Omit<WeekPlan, 'id'>>, dailyNote?: string): Promise<WeekPlan> {
     // Update properties
     const response = await this.client.pages.update({
       page_id: id,
@@ -65,7 +65,7 @@ export class NotionClient {
 
     // If plan text changed, update the current plan page
     if (updates.plan && this.currentPlanPageId) {
-      await this.updateCurrentPlanPage(updates.title ?? 'Current Plan', updates.weekFocus, updates.plan);
+      await this.updateCurrentPlanPage(updates.title ?? 'Current Plan', updates.weekFocus, updates.plan, dailyNote);
     }
 
     return fromNotionPage(response);
@@ -106,12 +106,12 @@ export class NotionClient {
     return lines.length > 0 ? lines.join('\n') : null;
   }
 
-  private async updateCurrentPlanPage(title: string, weekFocus: string | undefined, planText: string): Promise<void> {
+  private async updateCurrentPlanPage(title: string, weekFocus: string | undefined, planText: string, dailyNote?: string): Promise<void> {
     if (!this.currentPlanPageId) return;
 
     // Build new blocks first, before deleting anything
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const newBlocks = planToBlocks(title, weekFocus, planText) as any;
+    const newBlocks = planToBlocks(title, weekFocus, planText, dailyNote) as any;
 
     // Get existing blocks
     const existing = await this.client.blocks.children.list({ block_id: this.currentPlanPageId });
@@ -184,7 +184,7 @@ function toRichText(text: string): Array<{ type: 'text'; text: { content: string
 }
 
 // Convert plan text to Notion blocks (page content)
-function planToBlocks(title: string, weekFocus: string | undefined, planText: string): Array<Record<string, unknown>> {
+function planToBlocks(title: string, weekFocus: string | undefined, planText: string, dailyNote?: string): Array<Record<string, unknown>> {
   const blocks: Array<Record<string, unknown>> = [
     {
       object: 'block',
@@ -201,6 +201,17 @@ function planToBlocks(title: string, weekFocus: string | undefined, planText: st
       callout: {
         rich_text: toRichText(weekFocus),
         icon: { type: 'emoji', emoji: '🏃' },
+      },
+    });
+  }
+
+  // Add daily note if provided
+  if (dailyNote) {
+    blocks.push({
+      object: 'block',
+      type: 'quote',
+      quote: {
+        rich_text: toRichText(dailyNote),
       },
     });
   }
