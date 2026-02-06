@@ -2,8 +2,8 @@ import 'dotenv/config';
 import { IntervalsClient } from './integrations/intervals.js';
 import { NotionClient } from './integrations/notion.js';
 import { Coach } from './agent/coach.js';
-import { daysAgo, today, getWeekStart, getWeekNumber } from './utils/date.js';
-import type { CoachInput, RaceGoal } from './types/index.js';
+import { daysAgo, today, getWeekStart, getWeekNumber, toDateString } from './utils/date.js';
+import type { CoachInput, CompactActivity, RaceGoal } from './types/index.js';
 
 const {
   INTERVALS_ATHLETE_ID,
@@ -108,6 +108,33 @@ async function runCoach(input: CoachInput) {
   return result;
 }
 
+async function backfillPreviousWeekLoad(activities: CompactActivity[]) {
+  const currentWeekStart = getWeekStart();
+  const prevMonday = new Date(currentWeekStart);
+  prevMonday.setDate(prevMonday.getDate() - 7);
+  const prevWeekStart = toDateString(prevMonday);
+
+  const year = prevMonday.getFullYear();
+  const weekNum = getWeekNumber(prevWeekStart);
+  const prevPlanId = `plan-${year}-w${String(weekNum).padStart(2, '0')}`;
+
+  const prevPlan = await notion.getPlanByPlanId(prevPlanId);
+  if (!prevPlan || prevPlan.actualLoad !== undefined) {
+    return;
+  }
+
+  // Sum TSS from activities in the previous week (Mon-Sun)
+  const prevSunday = new Date(prevMonday);
+  prevSunday.setDate(prevSunday.getDate() + 6);
+  const prevWeekEnd = toDateString(prevSunday);
+
+  const weekActivities = activities.filter(a => a.date >= prevWeekStart && a.date <= prevWeekEnd);
+  const actualLoad = Math.round(weekActivities.reduce((sum, a) => sum + (a.load ?? 0), 0));
+
+  console.log(`\nBackfilling ${prevPlanId}: ${actualLoad} TSS (${weekActivities.length} activities)`);
+  await notion.updatePlan(prevPlan.id, { actualLoad, status: 'Done' });
+}
+
 async function main() {
   console.log('Fetching from Intervals.icu...');
   const [athlete, activities, wellness] = await Promise.all([
@@ -121,6 +148,8 @@ async function main() {
   if (!wellness) {
     throw new Error('Could not fetch wellness data');
   }
+
+  await backfillPreviousWeekLoad(activities);
 
   const currentPlan = await getCurrentWeekPlan();
   const athleteState = await notion.getAthleteState();

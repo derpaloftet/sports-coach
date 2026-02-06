@@ -18,11 +18,11 @@ function weekDayLabels(): string[] {
 }
 
 /**
- * Calculate weekly summary from activities (for trend visibility)
+ * Group activities by week and format for coach readability
  */
-function calculateWeeklySummary(activities: CompactActivity[]): string {
+function groupActivitiesByWeek(activities: CompactActivity[]): string {
   // Group activities by week (Monday-Sunday)
-  const weeks: Map<string, { runKm: number; runCount: number; totalLoad: number; totalMin: number }> = new Map();
+  const weeks: Map<string, CompactActivity[]> = new Map();
 
   for (const a of activities) {
     const date = new Date(a.date);
@@ -33,34 +33,65 @@ function calculateWeeklySummary(activities: CompactActivity[]): string {
     const weekKey = monday.toISOString().split('T')[0];
 
     if (!weeks.has(weekKey)) {
-      weeks.set(weekKey, { runKm: 0, runCount: 0, totalLoad: 0, totalMin: 0 });
+      weeks.set(weekKey, []);
     }
-
-    const week = weeks.get(weekKey)!;
-    week.totalLoad += a.load ?? 0;
-    week.totalMin += a.durationMin;
-
-    if (a.type === 'Run') {
-      week.runKm += a.distanceKm ?? 0;
-      week.runCount++;
-    }
+    weeks.get(weekKey)!.push(a);
   }
 
-  // Sort by week and take last 4
+  // Sort weeks by date (most recent first)
   const sortedWeeks = Array.from(weeks.entries())
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .slice(0, 4)
-    .reverse();
+    .sort((a, b) => b[0].localeCompare(a[0]));
 
-  if (sortedWeeks.length === 0) return '';
+  if (sortedWeeks.length === 0) return 'No recent activities found.';
 
-  const lines = sortedWeeks.map(([weekStart, data]) => {
-    const date = new Date(weekStart);
-    const weekLabel = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}`;
-    return `${weekLabel}: ${data.runKm.toFixed(1)}km (${data.runCount} runs), ${Math.round(data.totalLoad)} TSS total`;
-  });
+  // Current week start
+  const currentWeekStart = getWeekStart();
 
-  return `## Weekly Trend (last 4 weeks)\n${lines.join('\n')}`;
+  const sections: string[] = [];
+
+  for (const [weekStart, weekActivities] of sortedWeeks) {
+    const monday = new Date(weekStart);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+
+    // Calculate week label
+    let weekLabel: string;
+    if (weekStart === currentWeekStart) {
+      weekLabel = 'This Week';
+    } else {
+      const weeksDiff = Math.round((new Date(currentWeekStart).getTime() - new Date(weekStart).getTime()) / (7 * 24 * 60 * 60 * 1000));
+      weekLabel = weeksDiff === 1 ? 'Last Week' : `${weeksDiff} Weeks Ago`;
+    }
+
+    const mondayStr = `${String(monday.getDate()).padStart(2, '0')}.${String(monday.getMonth() + 1).padStart(2, '0')}`;
+    const sundayStr = `${String(sunday.getDate()).padStart(2, '0')}.${String(sunday.getMonth() + 1).padStart(2, '0')}`;
+
+    // Calculate weekly totals
+    const runKm = weekActivities
+      .filter(a => a.type === 'Run')
+      .reduce((sum, a) => sum + (a.distanceKm ?? 0), 0);
+    const runCount = weekActivities.filter(a => a.type === 'Run').length;
+    const totalLoad = weekActivities.reduce((sum, a) => sum + (a.load ?? 0), 0);
+
+    sections.push(`### ${weekLabel} (${mondayStr} - ${sundayStr})`);
+    sections.push(`Summary: ${runKm.toFixed(1)}km (${runCount} runs), ${Math.round(totalLoad)} TSS total\n`);
+
+    // List activities
+    for (const a of weekActivities) {
+      let line = `${a.date} | ${a.type} | ${a.durationMin}min`;
+      if (a.distanceKm) line += ` | ${a.distanceKm}km`;
+      if (a.avgHr) line += ` | ${a.avgHr}bpm avg`;
+      if (a.load) line += ` | ${a.load} TSS`;
+      if (a.feel) line += ` | feel:${a.feel}/5`;
+      if (a.rpe) line += ` | RPE:${a.rpe}/10`;
+      if (a.intervals?.length) line += ` | intervals: ${a.intervals.join(', ')}`;
+      if (a.notes) line += ` | "${a.notes}"`;
+      sections.push(line);
+    }
+    sections.push('');
+  }
+
+  return sections.join('\n');
 }
 
 export function buildSystemPrompt(input: CoachInput): string {
@@ -159,33 +190,25 @@ Include the technique cue in the weekFocus message so the athlete sees it on the
 
 ## Your Task
 Analyze the athlete's recent training and current status. Then:
-1. **Review last week**: Before creating or updating a plan, briefly assess how the previous week went—compare planned vs actual training, note what went well, and flag what was missed or needs adjustment. Include this review in the weekFocus message.
-2. If no plan exists for this week, create one using create_week_plan
-3. If a plan exists, evaluate if adjustments are needed based on actual training vs planned
-4. Flag any injury risks using flag_risk if you see concerning patterns
-5. Add coaching notes using add_note for important observations
+1. **Review what actually happened**: The training history shows what the athlete ACTUALLY completed (from Intervals.icu). This is the ONLY source of truth for completed workouts. DO NOT mark any planned workouts as "completed" or "done" - only reference what appears in the training history.
+2. **Compare to plan**: If a plan exists, compare what was planned vs what actually happened (from training history). Note what went well and what was missed. Include this review in the weekFocus message.
+3. If no plan exists for this week, create one using create_week_plan
+4. If a plan exists, evaluate if adjustments are needed based on actual training (from training history) vs planned
+5. Flag any injury risks using flag_risk if you see concerning patterns
+6. Add coaching notes using add_note for important observations
+
+IMPORTANT: Never assume a planned workout was completed unless you see it explicitly in the training history with matching date and workout type.
 
 Be specific, practical, and prioritize the athlete's long-term health over short-term gains.`;
 }
 
 export function buildUserMessage(input: CoachInput): string {
-  const activitiesText = input.recentActivities
-    .map((a) => {
-      let line = `${a.date} | ${a.type} | ${a.durationMin}min`;
-      if (a.distanceKm) line += ` | ${a.distanceKm}km`;
-      if (a.avgHr) line += ` | ${a.avgHr}bpm avg`;
-      if (a.load) line += ` | ${a.load} TSS`;
-      if (a.feel) line += ` | feel:${a.feel}/5`;
-      if (a.rpe) line += ` | RPE:${a.rpe}/10`;
-      if (a.intervals?.length) line += ` | intervals: ${a.intervals.join(', ')}`;
-      if (a.notes) line += ` | "${a.notes}"`;
-      return line;
-    })
-    .join('\n');
+  const activitiesByWeek = groupActivitiesByWeek(input.recentActivities);
 
-  const weeklySummary = calculateWeeklySummary(input.recentActivities);
-
-  let message = `${weeklySummary}\n\n## Recent Activities (last 30 days)\n${activitiesText}\n\n`;
+  let message = `## Training History (Source of Truth: Intervals.icu)\n`;
+  message += `The following shows what the athlete ACTUALLY completed. This is the only source of truth for completed workouts.\n\n`;
+  message += activitiesByWeek;
+  message += `\n`;
 
   if (input.athleteState) {
     message += `## Athlete's Current State (self-reported)\n${input.athleteState}\n\n`;
