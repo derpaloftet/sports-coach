@@ -216,13 +216,30 @@ function planToBlocks(title: string, weekFocus: string | undefined, planText: st
     });
   }
 
-  // Each line becomes a bullet point
+  // Convert plan text to blocks (headers or bullets)
   for (const line of planText.split('\n')) {
-    if (line.trim()) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Check if line is a header
+    if (trimmed.startsWith('## ')) {
+      blocks.push({
+        object: 'block',
+        type: 'heading_2',
+        heading_2: { rich_text: toRichText(trimmed.slice(3)) },
+      });
+    } else if (trimmed.startsWith('# ')) {
+      blocks.push({
+        object: 'block',
+        type: 'heading_1',
+        heading_1: { rich_text: toRichText(trimmed.slice(2)) },
+      });
+    } else {
+      // Regular line becomes bullet point
       blocks.push({
         object: 'block',
         type: 'bulleted_list_item',
-        bulleted_list_item: { rich_text: toRichText(line) },
+        bulleted_list_item: { rich_text: toRichText(trimmed) },
       });
     }
   }

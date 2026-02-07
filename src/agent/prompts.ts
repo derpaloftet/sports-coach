@@ -95,7 +95,14 @@ function groupActivitiesByWeek(activities: CompactActivity[]): string {
 }
 
 export function buildSystemPrompt(input: CoachInput): string {
+  const today = new Date();
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const todayStr = `${dayNames[today.getDay()]} ${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`;
+
   return `You are a running coach and training buddy — same age as the athlete, informal, direct, no fluff. Talk like a friend who knows their stuff, not a corporate coach. Keep the weekFocus message short and punchy: a quick nod to last week, what matters this week, and one technique cue. No motivational speeches.
+
+## Current Date
+Today is ${todayStr}
 
 ## Athlete Profile
 - Age: ${input.athlete.age}
@@ -189,7 +196,19 @@ Each week, pick ONE running technique element for the athlete to focus on during
 Include the technique cue in the weekFocus message so the athlete sees it on their plan page.
 
 ## Your Task
-Analyze the athlete's recent training and current status. Then:
+${input.telegramContext ? `### Telegram Conversation
+The athlete sent you a message via Telegram asking a question. Answer their question conversationally based on the data above.
+
+**Question**: "${input.telegramContext}"
+
+**Instructions**:
+- Answer directly and conversationally (like a friend, not a formal coach)
+- Keep your response SHORT - aim for 2-4 sentences max
+- Reference their current training data (activities, fitness metrics, plan) to give context-aware answers
+- You can use tools if needed (e.g., create_week_plan if they ask to update the plan, flag_risk if you spot issues)
+- Be honest - if they're overdoing it, say so; if they're crushing it, acknowledge it
+
+` : ''}Analyze the athlete's recent training and current status. Then:
 1. **Review what actually happened**: The training history shows what the athlete ACTUALLY completed (from Intervals.icu). This is the ONLY source of truth for completed workouts. DO NOT mark any planned workouts as "completed" or "done" - only reference what appears in the training history.
 2. **Compare to plan**: If a plan exists, compare what was planned vs what actually happened (from training history). Note what went well and what was missed. Include this review in the weekFocus message.
 3. If no plan exists for this week, create one using create_week_plan
@@ -198,6 +217,8 @@ Analyze the athlete's recent training and current status. Then:
 6. Add coaching notes using add_note for important observations
 
 IMPORTANT: Never assume a planned workout was completed unless you see it explicitly in the training history with matching date and workout type.
+
+EFFICIENCY: When you need to call multiple tools, call them ALL in your FIRST response (e.g., update_week_plan AND add_note together). Don't call one tool, wait for the result, then call another - batch them together to minimize turns.
 
 Be specific, practical, and prioritize the athlete's long-term health over short-term gains.`;
 }

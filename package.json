@@ -12,12 +12,14 @@
     "test": "node dist/test.js",
     "replan": "tsc && node dist/index.js --force",
     "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "bot:local": "tsc && node dist/telegram/local.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@notionhq/client": "^2.2.15",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "grammy": "^1.39.3"
   },
   "devDependencies": {
     "@types/node": "^22.10.7",

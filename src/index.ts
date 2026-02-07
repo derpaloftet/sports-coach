@@ -135,23 +135,36 @@ async function backfillPreviousWeekLoad(activities: CompactActivity[]) {
   await notion.updatePlan(prevPlan.id, { actualLoad, status: 'Done' });
 }
 
-async function main() {
-  console.log('Fetching from Intervals.icu...');
+export async function main(telegramContext?: string) {
+  if (telegramContext) {
+    console.log(`\n[main] 🤖 Running with Telegram context: "${telegramContext}"`);
+  }
+
+  console.log('[main] 📡 Fetching from Intervals.icu...');
+  const fetchStart = Date.now();
+
   const [athlete, activities, wellness] = await Promise.all([
     intervals.getAthlete(),
     intervals.getCompactActivities(daysAgo(30)),
     intervals.getWellness(today()),
   ]);
-  console.log(`Athlete: age=${athlete.age}, maxHR=${athlete.maxHr}, LTHR=${athlete.lthr}, weight=${athlete.weight}kg`);
-  console.log(`Activities: ${activities.length}, Wellness: CTL=${wellness?.ctl.toFixed(1)}`);
+
+  const fetchTime = ((Date.now() - fetchStart) / 1000).toFixed(1);
+  console.log(`[main] ✓ Data fetched in ${fetchTime}s`);
+  console.log(`[main] Athlete: age=${athlete.age}, maxHR=${athlete.maxHr}, LTHR=${athlete.lthr}, weight=${athlete.weight}kg`);
+  console.log(`[main] Activities: ${activities.length}, Wellness: CTL=${wellness?.ctl.toFixed(1)}`);
 
   if (!wellness) {
     throw new Error('Could not fetch wellness data');
   }
 
+  console.log('[main] Backfilling previous week load...');
   await backfillPreviousWeekLoad(activities);
 
+  console.log('[main] Getting current week plan...');
   const currentPlan = await getCurrentWeekPlan();
+
+  console.log('[main] Getting athlete state...');
   const athleteState = await notion.getAthleteState();
   const { weekNumber, totalWeeks } = getWeeksUntilRace();
 
@@ -159,9 +172,9 @@ async function main() {
     console.log(`\nAthlete state loaded (${athleteState.length} chars)`);
   }
 
-  // Skip if plan exists and nothing changed since last update
+  // Skip if plan exists and nothing changed since last update (unless from Telegram)
   const force = process.argv.includes('--force');
-  if (currentPlan && !force) {
+  if (currentPlan && !force && !telegramContext) {
     const lastUpdated = currentPlan.lastUpdated;
     const latestActivity = activities.length > 0
       ? activities.reduce((latest, a) => (a.date > latest ? a.date : latest), activities[0].date)
@@ -175,7 +188,10 @@ async function main() {
     console.log(`\nNew activity detected (${latestActivity}), updating plan...`);
   }
 
-  await runCoach({
+  console.log(`[main] 🏃 Calling coach with ${telegramContext ? 'Telegram context' : 'scheduled run'}...`);
+  const coachStart = Date.now();
+
+  const result = await runCoach({
     athlete,
     wellness,
     recentActivities: activities,
@@ -184,7 +200,17 @@ async function main() {
     weekNumber,
     totalWeeks,
     athleteState: athleteState ?? undefined,
+    telegramContext,
   });
+
+  const coachTime = ((Date.now() - coachStart) / 1000).toFixed(1);
+  console.log(`[main] ✓ Coach completed in ${coachTime}s\n`);
+
+  return result;
 }
 
-main().catch(console.error);
+// Only run if this is the main module (not imported)
+// In ES modules, check if import.meta.url matches the executed file
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(console.error);
+}

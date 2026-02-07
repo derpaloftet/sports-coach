@@ -95,6 +95,7 @@ export interface CoachInput {
   weekNumber: number;
   totalWeeks: number;
   athleteState?: string;
+  telegramContext?: string; // User's question from Telegram
 }
 
 // Config from environment
