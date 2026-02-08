@@ -96,6 +96,7 @@ export interface CoachInput {
   totalWeeks: number;
   athleteState?: string;
   telegramContext?: string; // User's question from Telegram
+  targetWeekStart?: string; // Optional target week start date for future planning
 }
 
 // Config from environment

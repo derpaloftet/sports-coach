@@ -60,13 +60,21 @@ const coach = new Coach({
   notion,
 });
 
-async function getCurrentWeekPlan() {
-  const weekStart = getWeekStart();
-  const year = new Date(weekStart).getFullYear();
-  const weekNum = getWeekNumber(weekStart);
-  const planId = `plan-${year}-w${String(weekNum).padStart(2, '0')}`;
+async function getWeekPlan(weeksFromNow: number = 0) {
+  const currentWeekStart = getWeekStart();
+  const [year, month, day] = currentWeekStart.split('-').map(Number);
+  const targetDate = new Date(year, month - 1, day, 12, 0, 0);
+  targetDate.setDate(targetDate.getDate() + (weeksFromNow * 7));
 
-  console.log(`\nChecking for plan ${planId}...`);
+  const weekStart = toDateString(targetDate);
+  const planYear = targetDate.getFullYear();
+  const weekNum = getWeekNumber(weekStart);
+  const planId = `plan-${planYear}-w${String(weekNum).padStart(2, '0')}`;
+
+  const weekLabel = weeksFromNow === 0 ? 'this week' :
+                    weeksFromNow === 1 ? 'next week' :
+                    `week ${weeksFromNow} from now`;
+  console.log(`\nChecking for plan ${planId} (${weekLabel})...`);
   const plan = await notion.getPlanByPlanId(planId);
 
   if (plan) {
@@ -74,10 +82,10 @@ async function getCurrentWeekPlan() {
     console.log('Status:', plan.status);
     console.log('Goal:', plan.goal);
   } else {
-    console.log('No plan found for this week');
+    console.log(`No plan found for ${weekLabel}`);
   }
 
-  return plan;
+  return { plan, weekStart };
 }
 
 async function runCoach(input: CoachInput) {
@@ -135,9 +143,13 @@ async function backfillPreviousWeekLoad(activities: CompactActivity[]) {
   await notion.updatePlan(prevPlan.id, { actualLoad, status: 'Done' });
 }
 
-export async function main(telegramContext?: string) {
+export async function main(telegramContext?: string, weeksFromNow: number = 0) {
   if (telegramContext) {
     console.log(`\n[main] 🤖 Running with Telegram context: "${telegramContext}"`);
+  }
+
+  if (weeksFromNow > 0) {
+    console.log(`\n[main] 📅 Planning for ${weeksFromNow === 1 ? 'next week' : `week ${weeksFromNow} from now`}`);
   }
 
   console.log('[main] 📡 Fetching from Intervals.icu...');
@@ -161,8 +173,8 @@ export async function main(telegramContext?: string) {
   console.log('[main] Backfilling previous week load...');
   await backfillPreviousWeekLoad(activities);
 
-  console.log('[main] Getting current week plan...');
-  const currentPlan = await getCurrentWeekPlan();
+  console.log(`[main] Getting ${weeksFromNow === 0 ? 'current' : weeksFromNow === 1 ? 'next' : 'target'} week plan...`);
+  const { plan: currentPlan, weekStart } = await getWeekPlan(weeksFromNow);
 
   console.log('[main] Getting athlete state...');
   const athleteState = await notion.getAthleteState();
@@ -172,9 +184,9 @@ export async function main(telegramContext?: string) {
     console.log(`\nAthlete state loaded (${athleteState.length} chars)`);
   }
 
-  // Skip if plan exists and nothing changed since last update (unless from Telegram)
+  // Skip if plan exists and nothing changed since last update (unless from Telegram or future weeks)
   const force = process.argv.includes('--force');
-  if (currentPlan && !force && !telegramContext) {
+  if (currentPlan && !force && !telegramContext && weeksFromNow === 0) {
     const lastUpdated = currentPlan.lastUpdated;
     const latestActivity = activities.length > 0
       ? activities.reduce((latest, a) => (a.date > latest ? a.date : latest), activities[0].date)
@@ -197,10 +209,11 @@ export async function main(telegramContext?: string) {
     recentActivities: activities,
     currentWeekPlan: currentPlan,
     raceGoal,
-    weekNumber,
+    weekNumber: weeksFromNow === 0 ? weekNumber : weekNumber + weeksFromNow,
     totalWeeks,
     athleteState: athleteState ?? undefined,
     telegramContext,
+    targetWeekStart: weeksFromNow > 0 ? weekStart : undefined,
   });
 
   const coachTime = ((Date.now() - coachStart) / 1000).toFixed(1);
@@ -212,5 +225,7 @@ export async function main(telegramContext?: string) {
 // Only run if this is the main module (not imported)
 // In ES modules, check if import.meta.url matches the executed file
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(console.error);
+  const nextWeekFlag = process.argv.includes('--next-week');
+  const weeksFromNow = nextWeekFlag ? 1 : 0;
+  main(undefined, weeksFromNow).catch(console.error);
 }

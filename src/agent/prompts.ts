@@ -1,19 +1,21 @@
 import type { CoachInput, CompactActivity } from '../types/index.js';
-import { getWeekStart } from '../utils/date.js';
+import { getWeekStart, formatDayDate, toDateString } from '../utils/date.js';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 /**
- * Build "Mon 03.02", "Tue 04.02", ... labels for the current week.
+ * Build "Mon 03.02", "Tue 04.02", ... labels for a given week.
+ * @param weekStart Optional week start date (YYYY-MM-DD). Defaults to current week.
  */
-function weekDayLabels(): string[] {
-  const monday = new Date(getWeekStart());
-  return DAY_NAMES.map((name, i) => {
+function weekDayLabels(weekStart?: string): string[] {
+  const start = weekStart || getWeekStart();
+  const [year, month, day] = start.split('-').map(Number);
+  const monday = new Date(year, month - 1, day, 12, 0, 0);
+
+  return DAY_NAMES.map((_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    return `${name} ${dd}.${mm}`;
+    return formatDayDate(toDateString(d));
   });
 }
 
@@ -76,9 +78,10 @@ function groupActivitiesByWeek(activities: CompactActivity[]): string {
     sections.push(`### ${weekLabel} (${mondayStr} - ${sundayStr})`);
     sections.push(`Summary: ${runKm.toFixed(1)}km (${runCount} runs), ${Math.round(totalLoad)} TSS total\n`);
 
-    // List activities
+    // List activities with day-of-week included
     for (const a of weekActivities) {
-      let line = `${a.date} | ${a.type} | ${a.durationMin}min`;
+      const dayLabel = formatDayDate(a.date);
+      let line = `${dayLabel} (${a.date}) | ${a.type} | ${a.durationMin}min`;
       if (a.distanceKm) line += ` | ${a.distanceKm}km`;
       if (a.avgHr) line += ` | ${a.avgHr}bpm avg`;
       if (a.load) line += ` | ${a.load} TSS`;
@@ -132,7 +135,7 @@ ${input.wellness.weight ? `- Current weight: ${input.wellness.weight} kg` : ''}
 
 ## Plan Format
 When creating or updating plans, use this exact format with day and date for each day:
-${weekDayLabels().map((label) => `${label}: [workout description]`).join('\n')}
+${weekDayLabels(input.targetWeekStart).map((label) => `${label}: [workout description]`).join('\n')}
 
 Include specific details: distance/duration, intensity (HR zone or pace), and any intervals.
 For rest days, simply write "Rest" or suggest active recovery.
@@ -145,8 +148,10 @@ Follow an 80/20 approach with threshold emphasis:
 - **15-25% in Zone 4** (threshold work, comfortably hard, sustainable for 20-40 min)
 - **5% or less in Zone 5** (VO2max intervals, only occasionally—once or twice per month)
 - Zone 4 threshold work is the engine of this training approach. It improves lactate clearance, raises sustainable race pace, and builds VO2max with moderate recovery cost. The athlete enjoys this intensity and can sustain it consistently week over week—adherence matters more than theoretical optimization.
-- Long run is always on one day of the weekend and on the other one is gym
-- Easy run is normally on Tuesday and hard one on Thursday
+- Weight training: Wednesday + one weekend day (Saturday or Sunday)
+- Long run: One weekend day (the other weekend day has weight training)
+- Easy run: Normally on Tuesday
+- Hard run (threshold/intervals): Normally on Thursday
 
 ### Weekly Structure (3 runs/week)
 1. **One easy run** - Pure Zone 2, 35-45 minutes
